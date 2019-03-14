@@ -1,0 +1,258 @@
+---
+title: "6101 FINAL PROJECT: Employee Attrition Analysis"
+author: "Pradip Hayu & Gaberial Campese"
+date: "11/26/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#INTRODUCTION:
+#We are working on a fictional HR data created by IBM data scientists. The link to the dataset is: https://www.ibm.com/communities/analytics/watson-analytics-blog/hr-employee-attrition/. It includes data for all the current and past employees with all the personal, compensation, and performance details. The 35 variables in the dataset are pretty self-explanatory in explaining the reasons behind an employee leaving the company. Attrition is our dependent variable since it is bivariate. We strive to figure out the factors which cause employee attrition by employing a logistic regression model. The dataset will be divided into test and train data and will be trained and tested accordingly. Independent variables will be chosen via trial and error method based on their significance & ROC curve will be used to check the efficiency of the model.The results from our model will be used to prevent top performers from leaving the company.
+
+#PROCEDURES:
+#Data was collected and cleaned. EDA was performed.
+#Data was divided into test and train and test: 80% train & 20% test set.
+#Prediction was made on attrition. The test model was giving output probabilities which ranged from 0 to 1. It didn't make sense as attrition had to be either 0 or 1. The probability limit was set to a particular value in the test model based on trial and error so that maximum model efficiency was possible.
+#Hit rate was developed, confusion matrix was analyzed, and ROC Curve was produced.
+#ROC curve was used to check the efficiency of the model.
+#Two models were created following the above procedures, and the best model was chosen based on model efficiency and cost effectiveness.
+
+##Loading required packages
+library(ggplot2)
+library(bestglm)
+library(caret)
+library(car)
+library(ResourceSelection)
+library(corrplot)
+library(gridExtra)
+library(pROC)
+library(pscl)
+library(ISLR)
+library(dplyr)
+library(ROCR)
+
+
+getwd()
+EA <- read.csv("Employee_Attrition.csv", header = TRUE, sep = ",")
+str(EA)
+summary(EA)
+#1470 observations of 35 variables
+
+#In the 2nd sheet of Employee_Attrition.xlsx File, 7 variables were mentioned which were all factor level variables, however the structure showed them as integers, so let's change those to factor level variables.
+EA$Education <- as.factor(EA$Education)
+EA$EnvironmentSatisfaction <- as.factor(EA$EnvironmentSatisfaction)
+EA$JobInvolvement <- as.factor(EA$JobInvolvement)
+EA$JobSatisfaction <- as.factor(EA$JobSatisfaction)
+EA$PerformanceRating <- as.factor(EA$PerformanceRating)
+EA$RelationshipSatisfaction <- as.factor(EA$RelationshipSatisfaction)
+EA$WorkLifeBalance <- as.factor(EA$WorkLifeBalance)
+
+#After carefully looking at the rest of the variables, we also changed these two variables as factor level variables
+EA$JobLevel <- as.factor(EA$JobLevel)
+EA$StockOptionLevel <- as.factor(EA$StockOptionLevel)
+
+#Attrition is our binary variable which has two levels "Yes" as 2 and "No" as 1, so let's change the "Yes" level from 2 to 1 & "No" level from 1 to 0.
+EA$Attrition<-as.factor(EA$Attrition)
+levels(EA$Attrition)[2] <- "1"
+levels(EA$Attrition)[1] <- "0"
+
+#Let's check the structure of our data again to check that we have made the appropriate changes
+str(EA) #looks good now
+
+#Quick overview of Attrition
+Attrition_Plot = ggplot(EA, aes(x = EA$Attrition)) + geom_bar(fill = c("blue", "red" )) + theme (text = element_text(size = 10), axis.text.x = element_text(angle = 90, hjust = 1))
+Attrition_Plot 
+#237 employees have attrition which is 16% of the total employees. Attrition is definitely a big issue.
+
+#Correlation Matrix & corrplot of numeric variables
+cor_matrix <- cor(EA[,c(1,4,6,13,19:21,24,29:30,32:35)], use="pairwise", method = "spearman")
+corrplot(cor_matrix, method = "pie", type = "upper")
+#We saw that the variables 'Years at Company' & 'Years in Current Role', and 'Years at Company' & 'Years with Current Manager' are highly correlated. We need to be careful with these variables when we choose the independent variables for our model later on so that multicollinearity could be prevented.
+
+#Partition the data set into test and train. 80% train and 20% test approach was implemented.
+train<- EA[1:1176, ]
+test <- EA[1177:1470, ]
+
+#We created a model with all our variables except 'Over18' since it was a factor with only one level; all the employees were over 18 years of age
+FullModel <- glm(formula = Attrition ~ Age + BusinessTravel + DailyRate + Department + DistanceFromHome + Education + EducationField + EmployeeCount + EmployeeNumber + EnvironmentSatisfaction + Gender + HourlyRate + JobInvolvement + JobLevel + JobRole + JobSatisfaction + MaritalStatus + MonthlyIncome + MonthlyRate + NumCompaniesWorked+ OverTime + PercentSalaryHike + PerformanceRating + RelationshipSatisfaction + StandardHours + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + WorkLifeBalance + YearsAtCompany + YearsInCurrentRole + YearsSinceLastPromotion + YearsWithCurrManager, family = binomial(link = "logit"), data = train)
+summary(FullModel)
+
+#From the above trial and error method, we chose the following 11 variables which contributed most(***) to the model: (1)BusinessTravel, (2)DistanceFromHome, (3)EnvironmentSatisfaction, (4)JobInvolvement, (5)JobSatisfaction, (6)NumCompaniesWorked, (7)OverTime, (8)RelationshipSatisfaction, (9)WorkLifeBalance, (10) YearsSinceLastPromotion, & (11) YearsWithCurrManager
+
+# Visualization of these 11 independent variables Vs our dependent variable 'Attrition'
+Business_Travel <- ggplot(EA, aes(BusinessTravel, fill = Attrition)) + geom_bar(stat="count")
+#The proportion of attrition was higher for employees who travel rarely.
+
+Distance_From_Home <- ggplot(EA, aes(DistanceFromHome, fill = Attrition)) + geom_bar()
+#It was surprising to see that a lot of employees leave their jobs who live near to the company.
+
+Environment_Satisfaction <- ggplot(EA, aes(EnvironmentSatisfaction, 
+                                           fill = Attrition)) + geom_bar()
+
+Job_Satisfaction <- ggplot(EA, aes(JobSatisfaction, fill = Attrition)) + geom_bar()
+#For Environment satisfaction and Job Satisfaction, the attrition level was more or less same across the board.
+
+Job_Involvement <- ggplot(EA, aes(JobInvolvement, fill = Attrition)) + geom_bar()
+#Those employees who are highly involved in their jobs have higher proportion of attrition.
+
+Num_Companies_Worked <- ggplot(EA, aes(NumCompaniesWorked, 
+                                       fill = Attrition)) + geom_bar()
+#many employees who had worked in only one company before tend to quit more
+
+Over_Time <- ggplot(EA, aes(OverTime, fill = Attrition)) + geom_bar()
+#Comparatively, those employees who did overtime had higher atttrition rate.
+
+Relationship_Satisfaction <- ggplot(EA, aes(RelationshipSatisfaction,
+                                            fill = Attrition)) + geom_bar()
+#For Relationship satisfaction, the attrition level was more or less same across the board.
+
+Work_Life_Balance <- ggplot(EA, aes(WorkLifeBalance, fill = Attrition)) + geom_bar()
+#It looks like large proportion of 1 rating quit, but absolute number wise ratings 2 and 3 are on the higher side
+
+Years_Since_Last_Promotion <- ggplot(EA, aes(YearsSinceLastPromotion, fill =  
+                                               Attrition)) + geom_bar()
+#recently promoted employees tend to quit the company more
+
+Years_With_Curr_Manager <- ggplot(EA, aes(YearsWithCurrManager, fill 
+                                          = Attrition)) + geom_bar()
+#less years with current manager shows that more employees leave the company
+
+#Arranging the above plots for a broader view
+Graphs1to5<- grid.arrange(Business_Travel, Distance_From_Home, Environment_Satisfaction, Job_Involvement, Job_Satisfaction, ncol = 2)
+Graphs1to5
+
+Graphs6to11 <- grid.arrange(Num_Companies_Worked, Over_Time, Relationship_Satisfaction, Work_Life_Balance, Years_Since_Last_Promotion, Years_With_Curr_Manager, ncol = 2)
+
+
+#######################   MODEL 1    ############################
+
+#Let's drop the rest of the variables other than the above mentioned 11 variables and then run the logistic regression model
+Model1 <- glm(formula = Attrition ~ BusinessTravel + DistanceFromHome + EnvironmentSatisfaction + JobInvolvement + JobSatisfaction + NumCompaniesWorked + OverTime + RelationshipSatisfaction + WorkLifeBalance + YearsSinceLastPromotion + YearsWithCurrManager, family = binomial(link = "logit"), data = train)
+summary(Model1)
+
+#Multicollinearity check
+vif(Model1) #less than 5. independent variables are not correlated
+
+varImp(Model1) #This function is a generic method for calculating variable importance for objects produced by train. The independent variable "Over Time" is in the top of the list with a value of 8.912969.	
+
+#The output from the summary was expressed in log odds. We can convert to percentage by using an exponential function as follows:
+exp(coef(Model1))
+
+#Make predictions on attrition, produce "hit rate", analyze confusion matrix and ROC Curve
+
+#Use the model created to predict attrition on the data
+predict.model1 <- predict.glm(Model1, test, type='response')
+head(predict.model1) #This is the likelihood this employee will leave/quit (attrition)
+#all these values are less than 0.5
+#We are classifying the output in the following manner, "if it is greater than .5 label as 1 if not label as a 0."
+predict.model1.1 <- ifelse(predict.model1 > 0.5,1,0)
+#We are creating percentage likelihood of attrition for each value, if it is above 50%, we are saying it's more likely to occur. 
+head(predict.model1.1) #all of those were less than 0.5, so they became zeroes
+
+#Misclassification Error: Confusion Matrix (Test Data)
+Confusion_Test <- table(Predicted = predict.model1.1, Actual = test$Attrition)
+Confusion_Test 
+#245 employees actually have no attrition and model also correctly predicts them to be belonging to zero or no attrition. This is a correct classification. Model predicts 11 employees have attrition which is true. The other two numbers of the diagonal are misclassified. 32 employees actually have attrition, but the model predicted them to be belonging to no attrition. 6 employees had no attrtion, but the model classified them as having attrition. 
+Confusion_Test1 <- 1- sum(diag(Confusion_Test))/sum(Confusion_Test)
+Confusion_Test1 #12.93% misclasssfication in Test Data
+
+#Misclassification Error: Confusion Matrix (Train Data)
+predict.model1.train <- predict.glm(Model1, train, type='response')
+predict.model1.1.train <- ifelse(predict.model1.train > 0.5,1,0)
+head(predict.model1.1.train)
+Confusion_Train <- table(Predicted = predict.model1.1.train, Actual = train$Attrition)
+Confusion_Train
+Confusion_Train1 <- 1-sum(diag(Confusion_Train))/sum(Confusion_Train)
+Confusion_Train1 #14.20% misclassification in Train Data
+
+# Generating Hit Rate
+head(test$Attrition)
+model1hit <- mean(predict.model1.1!=as.numeric(test$Attrition))
+model1hit #Hit Rate = 97.96# which is prettty good
+
+#To determine the quality of the model in logistic regression, we use ROC and AUC.
+#ROC is measurement of the ratio of True Positives Rate "tpr" and  False Positives Rate "fpr"
+#ROC Curve
+Attr_predict1 <- prediction(predict.model1, test$Attrition)
+Attr_performance1 <- performance(Attr_predict1, measure = "tpr",x.measure = "fpr")
+plot(Attr_performance1) #ROC Curve looking good
+
+#We can also get the AUC again using the performance function
+AUC <- performance(Attr_predict1, measure = "auc")
+AUC #AUC = 78.25% 
+
+# Finally, the Goodness-of-fit test:
+with(Model1, pchisq(null.deviance - deviance, df.null - df.residual, lower.tail = F))
+# p-value = 2.23x10^-35. Since this p-value is so small, our confidence level is so high which means that this model is statistically significant
+
+
+#######################   MODEL 2     ############################
+
+#Let's drop the variables from Model1 which were not contributing and create a new logistic regression model. This model now contains only 7 independent variables.
+Model2 <- glm(formula = Attrition ~ BusinessTravel + EnvironmentSatisfaction + JobInvolvement + JobSatisfaction + OverTime + WorkLifeBalance + YearsWithCurrManager,family = binomial(link = "logit"), data = train)
+summary(Model2)
+
+#Multicollinearity check
+vif(Model2) #less than 5. independent variables are not correlated
+
+exp(coef(Model2)) #must convert to %
+
+#Make predictions on attrition, produce "hit rate", analyze confusion matrix and ROC Curve
+
+#Attrition Prediction
+predict.model2 <- predict.glm(Model2, test, type = 'response')
+head(predict.model2) #This is the likelihood this employee will leave/quit (attrition)
+#all these values are less than 0.5
+predict.model2.1 <- ifelse(predict.model2 > 0.5,1,0)
+#We are creating percentage likelihood of attrition for each value, if it is above 50%, we are saying it's more likely to occur. 
+head(predict.model2.1) #all of those were less than 0.5, so they became zeroes
+
+#Misclassification Error: Confusion Matrix (Test Data)
+Confusion_Test2 <- table(Predicted = predict.model2.1, Actual = test$Attrition)
+Confusion_Test2
+#244 employees actually have no attrition and model also correctly predicts them to be belonging to zero or no attrition. This is a correct classification. Model predicts 7 employees have attrition which is true. The other two numbers of the diagonal are misclassified. 36 employees actually have attrition, but the model predicted them to be belonging to no attrition. 7 employees had no attrtion, but the model classified them as having attrition. 
+Confusion_Test2.1 <- 1- sum(diag(Confusion_Test2))/sum(Confusion_Test2)
+Confusion_Test2.1 #14.63% misclasssfication in Test Data
+
+#Misclassification Error: Confusion Matrix (Train Data)
+predict.model2.train <- predict.glm(Model2, train, type='response')
+predict.model2.1.train <- ifelse(predict.model2.train > 0.5,1,0)
+head(predict.model2.1.train)
+Confusion_Train2 <- table(Predicted = predict.model2.1.train, Actual = train$Attrition)
+Confusion_Train2
+Confusion_Train2.1 <- 1-sum(diag(Confusion_Train2))/sum(Confusion_Train2)
+Confusion_Train2.1 #14.96% misclassification in Train Data
+
+#Hit Rate
+head(test$Attrition)
+model2hit <- mean(predict.model2.1!=as.numeric(test$Attrition))
+model2hit #Hit Rate = 97.62# which is prettty good
+
+#ROC Curve
+Attr_predict2 <- prediction(predict.model2, test$Attrition)
+Attr_performance2 <- performance(Attr_predict2, measure = "tpr",x.measure = "fpr")
+plot(Attr_performance2) #ROC Curve looking good
+
+#AUC
+AUC <- performance(Attr_predict2, measure = "auc")
+AUC #AUC = 76.26%
+
+# The Goodness-of-fit test:
+with(Model2, pchisq(null.deviance - deviance, df.null - df.residual, lower.tail = F))
+# p-value = 1.571205e-34. Since this p-value is so small, our confidence level is so high which means that this model is statistically significant
+
+###CONCLUSION###
+
+#Putting the results from Model1 & Model2 side by side:
+# Model 1: # of independent variables employed = 11, AIC = 875.35, AUC = 78.25%
+# MODEL 2: # of independent variables employed = 7, AIC = 883.78, AUC = 76.26%
+
+#We wanted to reduce the number of variables and maximize model performance. The value of AIC increased and the percentage value of AUC decreased when we moved from Model1 to Model2. These numbers indicate a slight decrease in model efficiency. However, we will stick with Model2 since the number of variables were significantly decreased in Model2 which makes it more cost effective.
+
+#Since the Area Under the Curve (AUC) is calculated at 76.26% (Model2); it represents a reasonably good model. Generally models with AUC between 50% and 60% are considered unsuccessful, and models exceeding 90% as very good. A result in the 70%-80% range is considered fair to good.
+
+```
+
+

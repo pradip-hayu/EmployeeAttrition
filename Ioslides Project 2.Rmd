@@ -1,0 +1,81 @@
+---
+title: "Employee Attrition Analysis"
+author: "Pradip Hayu & Gaberial Campese"
+date: "12/11/2018"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+getwd()
+```
+
+## Research Question
+
+What factors contribute to employee attrition?
+
+How likely is an employee to leave their company based on these factors? (Prediction effectiveness)
+
+## Overview
+
+- Logistic Regression Model
+- Plots
+- Model 1
+- Model 2
+- Summary of Findings
+
+## Logistic Regression Model
+
+- Why Logistic Regression?
+- Assess likelihood of Attrition based on factors to be determined
+- Attrition is changed to binary variable (1 yes, 0 no)
+- Test/Train Set
+- Assessed qualities of 2 developed prediction models
+
+## Corr Plot
+
+<img src="/Users/pradiphayu/Desktop/Data Science/6101Intro/R/Corrplot.png" height="500" width="600">
+
+## Attrition Plot
+
+<img src="/Users/pradiphayu/Desktop/Data Science/6101Intro/R/Attrition.png" height="500" width="600">
+
+## Attrition Vs Independent Variables
+
+<img src="/Users/pradiphayu/Desktop/Data Science/6101Intro/R/Graphs1to5.png" height="450" width="600">
+
+## Attrition Vs Independent Variables
+
+<img src="/Users/pradiphayu/Desktop/Data Science/6101Intro/R/Graphs6to11.png" height="450" width="600">
+
+
+## Model 1
+
+- 11 ind variables used: BusinessTravel, DistanceFromHome, EnvironmentSatisfaction, JobInvolvement, JobSatisfaction, NumCompaniesWorked, OverTime, RelationshipSatisfaction, WorkLifeBalance, YearsSinceLastPromotion, YearsWithCurrManager
+- Prediction Model
+- Hit Rate = 0.9796
+- AUC = 0.7825
+
+## Prediction Model 1 ROC 
+
+<img src="/Users/pradiphayu/Desktop/Data Science/6101Intro/R/Model1.png" height="500" width="600">
+
+## Model 2
+
+- 7 ind variables used: BusinessTravel, EnvironmentSatisfaction, JobInvolvement, JobSatisfaction, OverTime, WorkLifeBalance, YearsWithCurrManager
+- Prediction Model
+- Hit Rate = 0.9762
+- AUC = 0.7626
+
+## Prediction Model 2 ROC 
+
+<img src="/Users/pradiphayu/Desktop/Data Science/6101Intro/R/Model2.png" height="500" width="600">
+
+## Summary of Findings
+
+- Model 1: # of variables used = 11, AIC = 875.35, AUC = 78.25%
+- Model 2: # variables used = 7, AIC = 883.78, AUC = 76.26%
+- Decrease in AUC and increase in AIC when moving from Model 1 to Model 2. Only slight changes
+- Stick with Prediction Model 2 since the number of variables were decreased significantly
+- Model 2 is more cost effective
+- The HR department should pay extra attention to these 7 variables: (1)BusinessTravel (2)EnvironmentSatisfaction (3)JobInvolvement (4)JobSatisfaction (5)OverTime (6)WorkLifeBalance (7)YearsWithCurrManager in order to prevent the problem of attrition 
